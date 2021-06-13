@@ -16,15 +16,11 @@ def unpack_nested(val, api, model_name: str = None, operation: str = "dump"):
     if val.nested == "self":
         return unpack_nested_self(val, api, model_name, operation)
 
-    model_name = get_default_model_name(val.nested)
-    
-    if val.many:
-        return fr.List(
-            fr.Nested(
-                map_type(val.nested, api, model_name, operation), **_ma_field_to_fr_field(val)
-        )
-    )
+    if isinstance(val.nested, str):
+        from marshmallow import class_registry
+        val.nested = class_registry.get_class(val.nested)
 
+    model_name = get_default_model_name(val.nested)
     return fr.Nested(
         map_type(val.nested, api, model_name, operation), **_ma_field_to_fr_field(val)
     )
@@ -155,9 +151,14 @@ def get_default_model_name(schema: Optional[Union[Schema, Type[Schema]]] = None)
     if schema:
         if isinstance(schema, Schema):
             return "".join(schema.__class__.__name__.rsplit("Schema", 1))
+        elif  isinstance(schema, str):
+            # return "".join(schema.__name__.rsplit("Schema", 1))
+            return schema.rsplit("Schema", 1) + "RM"
         else:
             # It is a type itself
             return "".join(schema.__name__.rsplit("Schema", 1))
+
+
 
     global num_default_models
     name = f"DefaultResponseModel_{num_default_models}"
@@ -168,7 +169,7 @@ def get_default_model_name(schema: Optional[Union[Schema, Type[Schema]]] = None)
 def _ma_field_to_fr_field(value: ma.Field) -> dict:
     fr_field_parameters = {}
 
-    if hasattr(value, "default") and type(value.default) != ma.utils._Missing:
+    if hasattr(value, "default"):
         fr_field_parameters["example"] = value.default
 
     if hasattr(value, "required"):
